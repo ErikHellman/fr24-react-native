@@ -13,7 +13,26 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FlightPositionFull, MapBounds } from './api/fr24';
+import {
+  FlightPositionFull,
+  getLiveFlightPositionsFull,
+  getLiveFlightPositionsFullByAirport,
+  MapBounds,
+} from './api/fr24';
+
+type AirportEntry = {
+  name: string;
+  iata: string;
+  icao: string;
+  city: string;
+  country: string;
+  coordinates: {
+    longitude: number;
+    latitude: number;
+  };
+};
+
+const AIRPORTS = require('../assets/airports.json') as AirportEntry[];
 
 const INITIAL_REGION: Region = {
   latitude: 37.7749,
@@ -22,7 +41,83 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 0.5,
 };
 
-const FLIGHT_MARKER_IMAGE = require('../assets/a380.png');
+import FLIGHT_MARKER_IMAGE from '../assets/a380.png';
+
+const FR24_API_KEY = process.env.EXPO_PUBLIC_FR24_API_KEY ?? '';
+
+const normalizeSearch = (value: string) =>
+  value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const scoreField = (query: string, text: string) => {
+  if (!text) {
+    return 0;
+  }
+  if (text === query) {
+    return 1000;
+  }
+  if (text.startsWith(query)) {
+    return 800 - Math.min(text.length - query.length, 50);
+  }
+  const index = text.indexOf(query);
+  if (index !== -1) {
+    return 600 - Math.min(index, 50);
+  }
+
+  let queryIndex = 0;
+  for (let i = 0; i < text.length && queryIndex < query.length; i += 1) {
+    if (text[i] === query[queryIndex]) {
+      queryIndex += 1;
+    }
+  }
+  if (queryIndex === query.length) {
+    return 400 - Math.min(text.length - query.length, 50);
+  }
+
+  return 0;
+};
+
+const scoreAirport = (query: string, airport: AirportEntry) => {
+  const fields = [
+    airport.name,
+    airport.city,
+    airport.country,
+    airport.iata,
+    airport.icao,
+  ].filter(Boolean);
+  let best = 0;
+  for (const field of fields) {
+    const score = scoreField(query, normalizeSearch(field));
+    if (score > best) {
+      best = score;
+    }
+  }
+  return best;
+};
+
+const searchAirports = (query: string) => {
+  const normalizedQuery = normalizeSearch(query.trim());
+  if (!normalizedQuery) {
+    return [];
+  }
+  const results = AIRPORTS.map((airport) => ({
+    airport,
+    score: scoreAirport(normalizedQuery, airport),
+  }))
+    .filter((result) => result.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return a.airport.name.localeCompare(b.airport.name);
+    })
+    .slice(0, 5)
+    .map((result) => result.airport);
+
+  return results;
+};
 
 export default function App() {
   return (
@@ -33,10 +128,13 @@ export default function App() {
 }
 
 function AppContent() {
-  const [fakeFlights, setFakeFlights] = useState<FlightPositionFull[]>([]);
+  const [visibleFlights, setVisibleFlights] = useState<FlightPositionFull[]>([]);
   const [selectedFlight, setSelectedFlight] = useState<FlightPositionFull | null>(null);
   const [sheetState, setSheetState] = useState<'collapsed' | 'half' | 'full'>('collapsed');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [selectedAirport, setSelectedAirport] = useState<AirportEntry | null>(null);
+  const [airportSearchCode, setAirportSearchCode] = useState<string | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
   const mapRef = useRef<MapView | null>(null);
   const lastRegionRef = useRef<Region | null>(null);
@@ -47,38 +145,82 @@ function AppContent() {
   const sheetTranslateY = useRef(new Animated.Value(screenHeight)).current;
   const insets = useSafeAreaInsets();
 
-  const generateFakeFlights = useCallback((bounds: MapBounds) => {
-    const flights: FlightPositionFull[] = [];
-    for (let i = 0; i < 10; i += 1) {
-      const lat = bounds.south + Math.random() * (bounds.north - bounds.south);
-      const lon = bounds.west + Math.random() * (bounds.east - bounds.west);
-      flights.push({
-        fr24_id: `fake-${Date.now()}-${i}`,
-        flight: `FR${100 + i}`,
-        callsign: `FAKE${100 + i}`,
-        lat,
-        lon,
-        track: Math.floor(Math.random() * 360),
-        alt: 30000 + Math.floor(Math.random() * 5000),
-        gspeed: 420 + Math.floor(Math.random() * 60),
-        vspeed: 0,
-        squawk: '0000',
-        timestamp: new Date().toISOString(),
-        source: 'sim',
-        hex: null,
-        type: 'A320',
-        reg: null,
-        painted_as: null,
-        operating_as: null,
-        orig_iata: null,
-        orig_icao: null,
-        dest_iata: null,
-        dest_icao: null,
-        eta: null,
-      });
+  const fetchLiveFlights = useCallback((bounds: MapBounds) => {
+    if (inFlightRef.current) {
+      inFlightRef.current.abort();
     }
-    return flights;
+
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+
+    getLiveFlightPositionsFull(FR24_API_KEY, { bounds, signal: controller.signal })
+      .then((response) => {
+        setVisibleFlights(response.data);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        console.warn('Failed to fetch live flight positions:', error);
+      });
   }, []);
+
+  const fetchLiveFlightsByAirport = useCallback((airportCode: string) => {
+    if (inFlightRef.current) {
+      inFlightRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+
+    getLiveFlightPositionsFullByAirport(FR24_API_KEY, { airportCode, signal: controller.signal })
+      .then((response) => {
+        setVisibleFlights(response.data);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+      });
+  }, []);
+
+  const closeAirportSearch = useCallback(() => {
+    setSelectedAirport(null);
+    setAirportSearchCode(null);
+    setSearchText('');
+  }, []);
+
+  const handleSearchTextChange = useCallback(
+    (text: string) => {
+      setSearchText(text);
+      if (selectedAirport || airportSearchCode) {
+        setSelectedAirport(null);
+        setAirportSearchCode(null);
+      }
+    },
+    [airportSearchCode, selectedAirport],
+  );
+
+  const handleSelectAirport = useCallback(
+    (airport: AirportEntry) => {
+      setSelectedAirport(airport);
+      setAirportSearchCode(airport.iata);
+
+      const region = lastRegionRef.current ?? INITIAL_REGION;
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(
+          {
+            latitude: airport.coordinates.latitude,
+            longitude: airport.coordinates.longitude,
+            latitudeDelta: region.latitudeDelta,
+            longitudeDelta: region.longitudeDelta,
+          },
+          450,
+        );
+      }
+    },
+    [],
+  );
 
   const handleRegionChangeComplete = useCallback(
     (region: Region) => {
@@ -87,39 +229,58 @@ function AppContent() {
       const south = region.latitude - region.latitudeDelta / 2;
       const east = region.longitude + region.longitudeDelta / 2;
       const west = region.longitude - region.longitudeDelta / 2;
-      
+
       const bounds: MapBounds = { north, south, east, west };
-      
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-      
-      debounceRef.current = setTimeout(() => {
-        if (inFlightRef.current) {
-          inFlightRef.current.abort();
-        }
-
-        const controller = new AbortController();
-        inFlightRef.current = controller;
-
-        const flights = generateFakeFlights(bounds);
-        setFakeFlights(flights);
-/*         getLiveFlightPositionsFull(FR24_API_KEY, { bounds, signal: controller.signal })
-          .then((response) => {
-            setFlightCount(response.data.length);
-          })
-          .catch((error: unknown) => {
-            if (error instanceof Error && error.name === 'AbortError') {
-              return;
-            }
-            console.warn('Failed to fetch live flight positions:', error);
-          });
- */
-
-      }, 600);
+      setMapBounds(bounds);
     },
     [],
   );
+
+  useEffect(() => {
+    if (!airportSearchCode) {
+      return;
+    }
+
+    fetchLiveFlightsByAirport(airportSearchCode);
+    const intervalId = setInterval(() => {
+      fetchLiveFlightsByAirport(airportSearchCode);
+    }, 10000);
+
+    return () => {
+      clearInterval(intervalId);
+      if (inFlightRef.current) {
+        inFlightRef.current.abort();
+      }
+    };
+  }, [airportSearchCode, fetchLiveFlightsByAirport]);
+
+  useEffect(() => {
+    if (airportSearchCode || !mapBounds) {
+      return;
+    }
+
+    fetchLiveFlights(mapBounds);
+    const intervalId = setInterval(() => {
+      fetchLiveFlights(mapBounds);
+    }, 10000);
+
+    return () => {
+      clearInterval(intervalId);
+      if (inFlightRef.current) {
+        inFlightRef.current.abort();
+      }
+    };
+  }, [airportSearchCode, fetchLiveFlights, mapBounds]);
+
+  const searchResults = useMemo(() => {
+    if (selectedAirport) {
+      return [];
+    }
+    return searchAirports(searchText);
+  }, [searchText, selectedAirport]);
+
+  const showNoResults =
+    !selectedAirport && normalizeSearch(searchText.trim()).length > 0 && searchResults.length === 0;
 
   useEffect(() => {
     if (!selectedFlight) {
@@ -204,7 +365,7 @@ function AppContent() {
       ['ETA', selectedFlight.eta],
     ] as Array<[string, string | number | null]>;
   }, [selectedFlight]);
-  
+
   return (
     <View style={styles.container}>
       <MapView
@@ -217,7 +378,19 @@ function AppContent() {
         initialRegion={INITIAL_REGION}
         onRegionChangeComplete={handleRegionChangeComplete}
       >
-        {fakeFlights.map((flight) => (
+        {AIRPORTS.map((airport) => (
+          <Marker
+            key={airport.iata}
+            coordinate={{
+              latitude: airport.coordinates.latitude,
+              longitude: airport.coordinates.longitude,
+            }}
+            title={airport.name}
+            description={`${airport.city}, ${airport.country} • ${airport.iata}`}
+            onPress={() => handleSelectAirport(airport)}
+          />
+        ))}
+        {visibleFlights.map((flight) => (
           <Marker
             key={flight.fr24_id}
             coordinate={{ latitude: flight.lat, longitude: flight.lon }}
@@ -248,7 +421,63 @@ function AppContent() {
           placeholder="Search flights, callsign, airport..."
           placeholderTextColor="rgba(255, 255, 255, 0.6)"
           style={styles.searchInput}
+          value={searchText}
+          onChangeText={handleSearchTextChange}
         />
+        {selectedAirport ? (
+          <View style={styles.searchResultWrap}>
+            <View style={styles.searchResultRow}>
+              <View style={styles.searchResultMeta}>
+                <Text style={styles.searchResultTitle}>{selectedAirport.name}</Text>
+                <Text style={styles.searchResultSubtitle}>
+                  {selectedAirport.city}, {selectedAirport.country}
+                </Text>
+              </View>
+              <View style={styles.searchResultCodes}>
+                <Text style={styles.searchResultCode}>{selectedAirport.iata}</Text>
+                <Text style={styles.searchResultCodeMuted}>{selectedAirport.icao}</Text>
+              </View>
+              <Pressable onPress={closeAirportSearch} hitSlop={8}>
+                <Text style={styles.searchResultClose}>X</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+        {!selectedAirport && searchResults.length > 0 ? (
+          <View style={styles.searchResultsList}>
+            {searchResults.map((airport, index) => (
+              <Pressable
+                key={airport.iata}
+                style={[
+                  styles.searchResultItem,
+                  index === searchResults.length - 1 ? styles.searchResultItemLast : null,
+                ]}
+                onPress={() => handleSelectAirport(airport)}
+              >
+                <View style={styles.searchResultMeta}>
+                  <Text style={styles.searchResultTitle}>{airport.name}</Text>
+                  <Text style={styles.searchResultSubtitle}>
+                    {airport.city}, {airport.country}
+                  </Text>
+                </View>
+                <View style={styles.searchResultCodes}>
+                  <Text style={styles.searchResultCode}>{airport.iata}</Text>
+                  <Text style={styles.searchResultCodeMuted}>{airport.icao}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {showNoResults ? (
+          <View style={styles.searchResultWrap}>
+            <View style={styles.searchResultRow}>
+              <Text style={styles.searchResultText}>No airports found.</Text>
+              <Pressable onPress={closeAirportSearch} hitSlop={8}>
+                <Text style={styles.searchResultClose}>X</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
       {selectedFlight ? (
         <>
@@ -357,6 +586,78 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(18, 23, 31, 0.68)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  searchResultWrap: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(14, 18, 23, 0.85)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  searchResultsList: {
+    marginTop: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(14, 18, 23, 0.85)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  searchResultItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  searchResultItemLast: {
+    borderBottomWidth: 0,
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  searchResultMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  searchResultCodes: {
+    alignItems: 'flex-end',
+  },
+  searchResultTitle: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  searchResultSubtitle: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 11,
+  },
+  searchResultCode: {
+    color: '#7ed9ff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  searchResultCodeMuted: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  searchResultText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  searchResultClose: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 12,
+    fontWeight: '700',
   },
   sheetBackdrop: {
     ...StyleSheet.absoluteFillObject,

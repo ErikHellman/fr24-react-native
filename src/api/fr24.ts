@@ -1,4 +1,4 @@
-const FR24_BASE_URL = 'https://api24dev.fr24.dev/';
+const FR24_BASE_URL = 'https://fr24api.flightradar24.com';
 
 export type MapBounds = {
   north: number;
@@ -32,6 +32,45 @@ export type FlightPositionFull = {
   eta: string | null;
 };
 
+export type Country = {
+  code: string;
+  name: string;
+};
+
+export type Timezone = {
+  name: string;
+  offset: number;
+};
+
+export type RunwaySurface = {
+  type: string;
+  description: string;
+};
+
+export type Runway = {
+  designator: string;
+  heading: number;
+  length: number;
+  width: number;
+  elevation: number;
+  thr_coordinates: [number, number];
+  surface: RunwaySurface;
+};
+
+export type AirportFull = {
+  name: string;
+  iata: string | null;
+  icao: string | null;
+  lon: number;
+  lat: number;
+  elevation: number;
+  country: Country;
+  city: string;
+  state: string | null;
+  timezone: Timezone;
+  runways: Runway[];
+};
+
 export type LiveFlightPositionsFullResponse = {
   data: FlightPositionFull[];
 };
@@ -39,6 +78,17 @@ export type LiveFlightPositionsFullResponse = {
 export type LiveFlightPositionsFullParams = {
   bounds: MapBounds;
   limit?: number;
+  signal?: AbortSignal;
+};
+
+export type LiveFlightPositionsFullAirportParams = {
+  airportCode: string;
+  limit?: number;
+  signal?: AbortSignal;
+};
+
+export type AirportFullParams = {
+  code: string;
   signal?: AbortSignal;
 };
 
@@ -73,7 +123,7 @@ export const getLiveFlightPositionsFull = async (
     limit,
   });
   const url = `${FR24_BASE_URL}/api/live/flight-positions/full?${query}`;
-
+  console.log('FR24 API Request URL:', url);
   const response = await fetch(url, {
     method: 'GET',
     headers: {
@@ -90,4 +140,64 @@ export const getLiveFlightPositionsFull = async (
   }
 
   return (await response.json()) as LiveFlightPositionsFullResponse;
+};
+
+export const getLiveFlightPositionsFullByAirport = async (
+  apiKey: string,
+  { airportCode, limit, signal }: LiveFlightPositionsFullAirportParams,
+): Promise<LiveFlightPositionsFullResponse> => {
+  if (!apiKey) {
+    throw new Error('Missing FR24 API key. Set FR24_API_KEY in your environment.');
+  }
+
+  const query = buildQuery({
+    airports: airportCode,
+    limit,
+  });
+  const url = `${FR24_BASE_URL}/api/live/flight-positions/full?${query}`;
+  console.log('FR24 API Request URL:', url);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      'Accept-Version': 'v1',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`FR24 API error ${response.status}: ${body}`);
+  }
+
+  return (await response.json()) as LiveFlightPositionsFullResponse;
+};
+
+export const getAirportFull = async (
+  apiKey: string,
+  { code, signal }: AirportFullParams,
+): Promise<AirportFull> => {
+  if (!apiKey) {
+    throw new Error('Missing FR24 API key. Set FR24_API_KEY in your environment.');
+  }
+
+  const url = `${FR24_BASE_URL}/api/static/airports/${encodeURIComponent(code)}/full`;
+  console.log('FR24 API Request URL:', url);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      'Accept-Version': 'v1',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`FR24 API error ${response.status}: ${body}`);
+  }
+
+  return (await response.json()) as AirportFull;
 };

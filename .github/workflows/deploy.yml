@@ -28,4 +28,5 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          npm run deploy -- --repo=https://x-access-token:$GITHUB_TOKEN@github.com/${{ github.repository }}.git
+          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/${{ github.repository }}.git
+          npm run deploy

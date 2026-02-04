@@ -1,4 +1,6 @@
-# AGENTS.md
+# CLAUDE.md
+
+> **Note:** This file must be kept in sync with AGENTS.md. Any changes made here should also be reflected in AGENTS.md.
 
 ## Overview
 This is a proof-of-concept app that demonstrates using React Native to implement a Flightradar24-style application across Android, iOS, and web.

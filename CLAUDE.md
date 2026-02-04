@@ -1,6 +1,6 @@
-# AGENTS.md
+# CLAUDE.md
 
-> **Note:** This file must be kept in sync with CLAUDE.md. Any changes made here should also be reflected in CLAUDE.md.
+> **Note:** This file must be kept in sync with AGENTS.md. Any changes made here should also be reflected in AGENTS.md.
 
 ## Overview
 

@@ -1,6 +1,6 @@
-import { Region } from 'react-native-maps';
+import { MapRegion } from '../types/map';
 
-export const INITIAL_REGION: Region = {
+export const INITIAL_REGION: MapRegion = {
   latitude: 37.7749,
   longitude: -122.4194,
   latitudeDelta: 0.5,

@@ -1,7 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import MapView, { Region } from 'react-native-maps';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FlightPositionFull } from './types/flight';
@@ -9,6 +8,7 @@ import { AirportEntry } from './types/airport';
 import { getAllAirports } from './utils/search';
 import { INITIAL_REGION } from './constants/map';
 import { colors } from './constants/theme';
+import { MapRefHandle, MapRegion } from './types/map';
 
 import { useFlightData } from './hooks/useFlightData';
 import { useAirportSearch } from './hooks/useAirportSearch';
@@ -30,8 +30,8 @@ export default function App() {
 }
 
 function AppContent() {
-  const mapRef = useRef<MapView | null>(null);
-  const lastRegionRef = useRef<Region | null>(null);
+  const mapRef = useRef<MapRefHandle | null>(null);
+  const lastRegionRef = useRef<MapRegion | null>(null);
   const insets = useSafeAreaInsets();
 
   // Custom hooks for state management
@@ -68,7 +68,7 @@ function AppContent() {
 
   // Handler for region changes that also stores last region
   const onRegionChangeComplete = useCallback(
-    (region: Region) => {
+    (region: MapRegion) => {
       lastRegionRef.current = region;
       handleRegionChangeComplete(region);
     },
@@ -104,7 +104,7 @@ function AppContent() {
 
       const region = lastRegionRef.current;
       if (region && mapRef.current) {
-        const targetRegion: Region = {
+        const targetRegion: MapRegion = {
           latitude: flight.lat - region.latitudeDelta / 4,
           longitude: flight.lon,
           latitudeDelta: region.latitudeDelta,

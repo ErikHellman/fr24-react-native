@@ -1,25 +1,29 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { FlightPositionFull } from '../../types/flight';
-import { AirportEntry } from '../../types/airport';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import { INITIAL_REGION } from '../../constants/map';
+import { MapRefHandle } from '../../types/map';
 import { FlightMarker } from './FlightMarker';
 import { AirportMarker } from './AirportMarker';
+import { FlightMapProps } from './types';
 
-export type FlightMapProps = {
-  airports: AirportEntry[];
-  flights: FlightPositionFull[];
-  onRegionChangeComplete: (region: Region) => void;
-  onFlightPress: (flight: FlightPositionFull) => void;
-  onAirportPress: (airport: AirportEntry) => void;
-};
-
-export const FlightMap = forwardRef<MapView, FlightMapProps>(
+export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
   ({ airports, flights, onRegionChangeComplete, onFlightPress, onAirportPress }, ref) => {
+    const mapViewRef = useRef<MapView | null>(null);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        animateToRegion: (region, duration) => {
+          mapViewRef.current?.animateToRegion(region, duration);
+        },
+      }),
+      []
+    );
+
     return (
       <MapView
-        ref={ref}
+        ref={mapViewRef}
         testID="flight-map"
         style={styles.map}
         loadingEnabled

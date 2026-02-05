@@ -1,5 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Asset } from 'expo-asset';
 import { FLIGHT_MARKER_IMAGE, INITIAL_REGION } from '../../constants/map';
 import { MapRefHandle, MapRegion } from '../../types/map';
 import { FlightMapProps } from './types';
@@ -90,7 +91,6 @@ const getZoomFromRegion = (region: MapRegion) => {
 
 export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
   ({ airports, flights, onRegionChangeComplete, onFlightPress, onAirportPress }, ref) => {
-    const flightIconUrl = Image.resolveAssetSource(FLIGHT_MARKER_IMAGE).uri;
     const containerRef = useRef<React.ElementRef<typeof View> | null>(null);
     const mapRef = useRef<any>(null);
     const googleRef = useRef<any>(null);
@@ -99,6 +99,7 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
     const flightMarkersRef = useRef<Map<string, any>>(new Map());
     const [mapReady, setMapReady] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [flightIconUrl, setFlightIconUrl] = useState<string | null>(null);
 
     useImperativeHandle(
       ref,
@@ -113,6 +114,31 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
       }),
       []
     );
+
+    useEffect(() => {
+      let cancelled = false;
+      const asset = Asset.fromModule(FLIGHT_MARKER_IMAGE);
+      if (asset.uri) {
+        setFlightIconUrl(asset.uri);
+      }
+
+      asset
+        .downloadAsync()
+        .then(() => {
+          if (!cancelled) {
+            setFlightIconUrl(asset.uri);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFlightIconUrl(asset.uri ?? null);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, []);
 
     useEffect(() => {
       const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
@@ -237,11 +263,21 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
       flights.forEach((flight) => {
         const position = { lat: flight.lat, lng: flight.lon };
         const title = flight.flight ?? flight.callsign ?? 'Unknown flight';
-        const icon = {
-          url: flightIconUrl,
-          scaledSize: new googleMaps.maps.Size(FLIGHT_ICON_SIZE, FLIGHT_ICON_SIZE),
-          anchor: new googleMaps.maps.Point(FLIGHT_ICON_SIZE / 2, FLIGHT_ICON_SIZE / 2),
-        };
+        const icon = flightIconUrl
+          ? {
+              url: flightIconUrl,
+              scaledSize: new googleMaps.maps.Size(FLIGHT_ICON_SIZE, FLIGHT_ICON_SIZE),
+              anchor: new googleMaps.maps.Point(FLIGHT_ICON_SIZE / 2, FLIGHT_ICON_SIZE / 2),
+            }
+          : {
+              path: googleMaps.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+              scale: 3,
+              rotation: flight.track ?? 0,
+              fillColor: '#7ed9ff',
+              fillOpacity: 1,
+              strokeColor: '#7ed9ff',
+              strokeWeight: 1,
+            };
 
         let marker = markers.get(flight.fr24_id);
         if (!marker) {
@@ -262,7 +298,7 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
         googleMaps.maps.event.clearListeners(marker, 'click');
         marker.addListener('click', () => onFlightPress(flight));
       });
-    }, [flights, mapReady, onFlightPress]);
+    }, [flights, mapReady, onFlightPress, flightIconUrl]);
 
     useEffect(() => {
       return () => {

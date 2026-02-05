@@ -6,7 +6,94 @@ import { MapRefHandle, MapRegion } from '../../types/map';
 import { FlightMapProps } from './types';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'fr24-google-maps-script';
+const GOOGLE_MAPS_CALLBACK = 'fr24InitGoogleMaps';
 const FLIGHT_ICON_SIZE = 36;
+let googleMapsPromise: Promise<any> | null = null;
+
+type AirportMarkerHandle = {
+  marker: any;
+};
+
+type FlightMarkerHandle = {
+  marker: any;
+  container: HTMLDivElement;
+  img?: HTMLImageElement;
+  arrow?: HTMLDivElement;
+};
+
+const replaceChildren = (container: HTMLElement, child: HTMLElement) => {
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+  container.appendChild(child);
+};
+
+const createAirportMarkerContent = () => {
+  const dot = document.createElement('div');
+  dot.style.width = '10px';
+  dot.style.height = '10px';
+  dot.style.borderRadius = '50%';
+  dot.style.backgroundColor = '#ffd166';
+  dot.style.border = '1px solid #1f2a33';
+  dot.style.boxSizing = 'border-box';
+  return dot;
+};
+
+const createFlightMarkerContainer = () => {
+  const container = document.createElement('div');
+  container.style.width = `${FLIGHT_ICON_SIZE}px`;
+  container.style.height = `${FLIGHT_ICON_SIZE}px`;
+  container.style.display = 'flex';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+  container.style.transformOrigin = '50% 50%';
+  return container;
+};
+
+const createFlightArrow = () => {
+  const arrow = document.createElement('div');
+  arrow.style.width = '0';
+  arrow.style.height = '0';
+  arrow.style.borderLeft = '6px solid transparent';
+  arrow.style.borderRight = '6px solid transparent';
+  arrow.style.borderBottom = '12px solid #7ed9ff';
+  return arrow;
+};
+
+const createFlightImage = (iconUrl: string) => {
+  const img = document.createElement('img');
+  img.src = iconUrl;
+  img.alt = '';
+  img.style.width = '100%';
+  img.style.height = '100%';
+  img.style.display = 'block';
+  return img;
+};
+
+const updateFlightMarkerContent = (
+  handle: FlightMarkerHandle,
+  iconUrl: string | null,
+  rotation: number
+) => {
+  handle.container.style.transform = `rotate(${rotation}deg)`;
+
+  if (iconUrl) {
+    if (!handle.img || handle.img.src !== iconUrl) {
+      const img = createFlightImage(iconUrl);
+      replaceChildren(handle.container, img);
+      handle.img = img;
+      handle.arrow = undefined;
+    }
+    return;
+  }
+
+  if (!handle.arrow) {
+    const arrow = createFlightArrow();
+    replaceChildren(handle.container, arrow);
+    handle.arrow = arrow;
+    handle.img = undefined;
+  }
+};
 
 const loadGoogleMaps = (apiKey: string): Promise<any> => {
   if (typeof window === 'undefined') {
@@ -14,22 +101,54 @@ const loadGoogleMaps = (apiKey: string): Promise<any> => {
   }
 
   const existing = (window as any).google;
-  if (existing?.maps) {
+  if (existing?.maps?.Map) {
     return Promise.resolve(existing);
   }
 
-  return new Promise((resolve, reject) => {
+  if (googleMapsPromise) {
+    return googleMapsPromise;
+  }
+
+  googleMapsPromise = new Promise((resolve, reject) => {
+    const resolveIfReady = () => {
+      const googleMaps = (window as any).google;
+      if (googleMaps?.maps?.Map) {
+        resolve(googleMaps);
+        return true;
+      }
+      return false;
+    };
+
+    (window as any)[GOOGLE_MAPS_CALLBACK] = () => {
+      if (!resolveIfReady()) {
+        reject(new Error('Google Maps callback fired but API was not found.'));
+      }
+      try {
+        delete (window as any)[GOOGLE_MAPS_CALLBACK];
+      } catch {
+        // Ignore cleanup failures (non-configurable properties).
+      }
+    };
+
     const currentScript = document.getElementById(GOOGLE_MAPS_SCRIPT_ID) as HTMLScriptElement | null;
 
     if (currentScript) {
-      currentScript.addEventListener('load', () => {
-        const googleMaps = (window as any).google;
-        if (googleMaps?.maps) {
-          resolve(googleMaps);
-        } else {
-          reject(new Error('Google Maps script loaded but API was not found.'));
-        }
-      });
+      if (!currentScript.src.includes(`callback=${GOOGLE_MAPS_CALLBACK}`)) {
+        currentScript.addEventListener('load', () => {
+          if (resolveIfReady()) {
+            return;
+          }
+          const start = Date.now();
+          const interval = window.setInterval(() => {
+            if (resolveIfReady()) {
+              window.clearInterval(interval);
+            } else if (Date.now() - start > 5000) {
+              window.clearInterval(interval);
+              reject(new Error('Google Maps failed to initialize.'));
+            }
+          }, 50);
+        });
+      }
       currentScript.addEventListener('error', () => {
         reject(new Error('Google Maps failed to load.'));
       });
@@ -40,18 +159,28 @@ const loadGoogleMaps = (apiKey: string): Promise<any> => {
     script.id = GOOGLE_MAPS_SCRIPT_ID;
     script.async = true;
     script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly`;
-    script.onload = () => {
-      const googleMaps = (window as any).google;
-      if (googleMaps?.maps) {
-        resolve(googleMaps);
-      } else {
-        reject(new Error('Google Maps script loaded but API was not found.'));
-      }
-    };
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${GOOGLE_MAPS_CALLBACK}&libraries=marker`;
     script.onerror = () => reject(new Error('Google Maps failed to load.'));
     document.head.appendChild(script);
   });
+
+  googleMapsPromise.catch(() => {
+    googleMapsPromise = null;
+  });
+
+  return googleMapsPromise;
+};
+
+const loadMarkerLibrary = (googleMaps: any): Promise<any> => {
+  if (googleMaps?.maps?.marker?.AdvancedMarkerElement) {
+    return Promise.resolve(googleMaps.maps.marker);
+  }
+
+  if (googleMaps?.maps?.importLibrary) {
+    return googleMaps.maps.importLibrary('marker');
+  }
+
+  return Promise.reject(new Error('Advanced marker library is not available.'));
 };
 
 const getRegionFromMap = (map: any): MapRegion | null => {
@@ -94,12 +223,28 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
     const containerRef = useRef<React.ElementRef<typeof View> | null>(null);
     const mapRef = useRef<any>(null);
     const googleRef = useRef<any>(null);
+    const markerLibraryRef = useRef<any>(null);
+    const markerLibraryPromiseRef = useRef<Promise<any> | null>(null);
     const idleListenerRef = useRef<any>(null);
-    const airportMarkersRef = useRef<Map<string, any>>(new Map());
-    const flightMarkersRef = useRef<Map<string, any>>(new Map());
+    const airportMarkersRef = useRef<Map<string, AirportMarkerHandle>>(new Map());
+    const flightMarkersRef = useRef<Map<string, FlightMarkerHandle>>(new Map());
     const [mapReady, setMapReady] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [flightIconUrl, setFlightIconUrl] = useState<string | null>(null);
+
+    const getMarkerLibrary = (googleMaps: any) => {
+      if (markerLibraryRef.current) {
+        return Promise.resolve(markerLibraryRef.current);
+      }
+      if (markerLibraryPromiseRef.current) {
+        return markerLibraryPromiseRef.current;
+      }
+      markerLibraryPromiseRef.current = loadMarkerLibrary(googleMaps).then((library) => {
+        markerLibraryRef.current = library;
+        return library;
+      });
+      return markerLibraryPromiseRef.current;
+    };
 
     useImperativeHandle(
       ref,
@@ -142,8 +287,13 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
 
     useEffect(() => {
       const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+      const mapId = process.env.EXPO_PUBLIC_GOOGLE_MAPS_MAP_ID ?? '';
       if (!apiKey) {
         setLoadError('Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.');
+        return;
+      }
+      if (!mapId) {
+        setLoadError('Missing EXPO_PUBLIC_GOOGLE_MAPS_MAP_ID.');
         return;
       }
 
@@ -169,6 +319,7 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
             streetViewControl: false,
             clickableIcons: false,
             backgroundColor: '#0e1217',
+            mapId,
           });
 
           mapRef.current = map;
@@ -198,49 +349,65 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
         return;
       }
 
+      let cancelled = false;
       const googleMaps = googleRef.current;
       const map = mapRef.current;
       const markers = airportMarkersRef.current;
 
-      const nextIds = new Set(airports.map((airport) => airport.iata));
-      markers.forEach((marker, id) => {
-        if (!nextIds.has(id)) {
-          marker.setMap(null);
-          markers.delete(id);
-        }
-      });
+      getMarkerLibrary(googleMaps)
+        .then((markerLibrary) => {
+          if (cancelled) {
+            return;
+          }
 
-      airports.forEach((airport) => {
-        const position = {
-          lat: airport.coordinates.latitude,
-          lng: airport.coordinates.longitude,
-        };
+          const { AdvancedMarkerElement } = markerLibrary;
+          const nextIds = new Set(airports.map((airport) => airport.iata));
 
-        let marker = markers.get(airport.iata);
-        if (!marker) {
-          marker = new googleMaps.maps.Marker({
-            map,
-            position,
-            title: airport.name,
-            zIndex: 1,
-            icon: {
-              path: googleMaps.maps.SymbolPath.CIRCLE,
-              scale: 4,
-              fillColor: '#ffd166',
-              fillOpacity: 1,
-              strokeColor: '#1f2a33',
-              strokeWeight: 1,
-            },
+          markers.forEach((handle, id) => {
+            if (!nextIds.has(id)) {
+              handle.marker.map = null;
+              markers.delete(id);
+            }
           });
-          markers.set(airport.iata, marker);
-        } else {
-          marker.setPosition(position);
-          marker.setTitle(airport.name);
-        }
 
-        googleMaps.maps.event.clearListeners(marker, 'click');
-        marker.addListener('click', () => onAirportPress(airport));
-      });
+          airports.forEach((airport) => {
+            const position = {
+              lat: airport.coordinates.latitude,
+              lng: airport.coordinates.longitude,
+            };
+
+            let handle = markers.get(airport.iata);
+            if (!handle) {
+              const content = createAirportMarkerContent();
+              const marker = new AdvancedMarkerElement({
+                map,
+                position,
+                title: airport.name,
+                zIndex: 1,
+                content,
+                gmpClickable: true,
+              });
+              handle = { marker };
+              markers.set(airport.iata, handle);
+            } else {
+              handle.marker.position = position;
+              handle.marker.title = airport.name;
+              handle.marker.zIndex = 1;
+            }
+
+            googleMaps.maps.event.clearListeners(handle.marker, 'gmp-click');
+            handle.marker.addListener('gmp-click', () => onAirportPress(airport));
+          });
+        })
+        .catch((error: Error) => {
+          if (!cancelled) {
+            console.warn('Advanced markers failed to load for airports.', error);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
     }, [airports, mapReady, onAirportPress]);
 
     useEffect(() => {
@@ -248,62 +415,75 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
         return;
       }
 
+      let cancelled = false;
       const googleMaps = googleRef.current;
       const map = mapRef.current;
       const markers = flightMarkersRef.current;
 
-      const nextIds = new Set(flights.map((flight) => flight.fr24_id));
-      markers.forEach((marker, id) => {
-        if (!nextIds.has(id)) {
-          marker.setMap(null);
-          markers.delete(id);
-        }
-      });
+      getMarkerLibrary(googleMaps)
+        .then((markerLibrary) => {
+          if (cancelled) {
+            return;
+          }
 
-      flights.forEach((flight) => {
-        const position = { lat: flight.lat, lng: flight.lon };
-        const title = flight.flight ?? flight.callsign ?? 'Unknown flight';
-        const icon = flightIconUrl
-          ? {
-              url: flightIconUrl,
-              scaledSize: new googleMaps.maps.Size(FLIGHT_ICON_SIZE, FLIGHT_ICON_SIZE),
-              anchor: new googleMaps.maps.Point(FLIGHT_ICON_SIZE / 2, FLIGHT_ICON_SIZE / 2),
+          const { AdvancedMarkerElement } = markerLibrary;
+          const nextIds = new Set(flights.map((flight) => flight.fr24_id));
+
+          markers.forEach((handle, id) => {
+            if (!nextIds.has(id)) {
+              handle.marker.map = null;
+              markers.delete(id);
             }
-          : {
-              path: googleMaps.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-              scale: 3,
-              rotation: flight.track ?? 0,
-              fillColor: '#7ed9ff',
-              fillOpacity: 1,
-              strokeColor: '#7ed9ff',
-              strokeWeight: 1,
-            };
-
-        let marker = markers.get(flight.fr24_id);
-        if (!marker) {
-          marker = new googleMaps.maps.Marker({
-            map,
-            position,
-            title,
-            zIndex: 2,
-            icon,
           });
-          markers.set(flight.fr24_id, marker);
-        } else {
-          marker.setPosition(position);
-          marker.setTitle(title);
-          marker.setIcon(icon);
-        }
 
-        googleMaps.maps.event.clearListeners(marker, 'click');
-        marker.addListener('click', () => onFlightPress(flight));
-      });
+          flights.forEach((flight) => {
+            const position = { lat: flight.lat, lng: flight.lon };
+            const title = flight.flight ?? flight.callsign ?? 'Unknown flight';
+            const rotation = flight.track ?? 0;
+
+            let handle = markers.get(flight.fr24_id);
+            if (!handle) {
+              const container = createFlightMarkerContainer();
+              const marker = new AdvancedMarkerElement({
+                map,
+                position,
+                title,
+                zIndex: 2,
+                content: container,
+                gmpClickable: true,
+              });
+              handle = { marker, container };
+              markers.set(flight.fr24_id, handle);
+            } else {
+              handle.marker.position = position;
+              handle.marker.title = title;
+              handle.marker.zIndex = 2;
+            }
+
+            updateFlightMarkerContent(handle, flightIconUrl, rotation);
+            googleMaps.maps.event.clearListeners(handle.marker, 'gmp-click');
+            handle.marker.addListener('gmp-click', () => onFlightPress(flight));
+          });
+        })
+        .catch((error: Error) => {
+          if (!cancelled) {
+            console.warn('Advanced markers failed to load for flights.', error);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
     }, [flights, mapReady, onFlightPress, flightIconUrl]);
 
     useEffect(() => {
       return () => {
-        airportMarkersRef.current.forEach((marker) => marker.setMap(null));
-        flightMarkersRef.current.forEach((marker) => marker.setMap(null));
+        airportMarkersRef.current.forEach((handle) => {
+          handle.marker.map = null;
+        });
+        flightMarkersRef.current.forEach((handle) => {
+          handle.marker.map = null;
+        });
       };
     }, []);
 
@@ -311,7 +491,7 @@ export const FlightMap = forwardRef<MapRefHandle, FlightMapProps>(
       <View style={styles.map}>
         <View ref={containerRef} style={styles.mapCanvas} />
         {!mapReady && !loadError && (
-          <View pointerEvents="none" style={styles.overlay}>
+          <View style={[styles.overlay, styles.overlayPassive]}>
             <ActivityIndicator color="#7ed9ff" />
             <Text style={styles.overlayText}>Loading Google Maps…</Text>
           </View>
@@ -343,6 +523,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
     backgroundColor: 'rgba(14, 18, 23, 0.65)',
+  },
+  overlayPassive: {
+    pointerEvents: 'none',
   },
   overlayText: {
     color: '#9fb2c1',

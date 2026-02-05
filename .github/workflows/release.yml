@@ -13,39 +13,9 @@ on:
 
 env:
   EXPO_PUBLIC_FR24_API_KEY: ${{ secrets.EXPO_PUBLIC_FR24_API_KEY }}
+  EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
 
 jobs:
-  # Build Web version
-  build-web:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build web app
-        run: npx expo export --platform web
-
-      - name: Create web archive
-        run: |
-          cd dist
-          zip -r ../fr24-web.zip .
-
-      - name: Upload web artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-build
-          path: fr24-web.zip
-          retention-days: 1
-
   # Build Android APK
   build-android:
     runs-on: ubuntu-latest
@@ -234,7 +204,6 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          cp artifacts/web-build/fr24-web.zip release-assets/
           cp artifacts/android-build/fr24-android.apk release-assets/
           cp artifacts/ios-simulator-build/fr24-ios-simulator.zip release-assets/
           # Copy signed IPA if available
@@ -257,17 +226,11 @@ jobs:
 
             | Platform | File | Description |
             |----------|------|-------------|
-            | Web | `fr24-web.zip` | Static web build - extract and serve with any web server |
             | Android | `fr24-android.apk` | Android APK - install directly on Android devices |
             | iOS (Simulator) | `fr24-ios-simulator.zip` | iOS Simulator build - for testing on macOS |
             | iOS (Device) | `fr24-ios.ipa` | iOS IPA - for device installation (if signed) |
 
             ## Installation Instructions
-
-            ### Web
-            1. Extract `fr24-web.zip`
-            2. Serve the contents with any static web server
-            3. Example: `npx serve dist`
 
             ### Android
             1. Download `fr24-android.apk`

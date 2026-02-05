@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { StyleSheet, Text, View } from 'react-native';
 import { FlightPositionFull } from '../../types/flight';
 import { colors, spacing } from '../../constants/theme';
 
@@ -67,15 +68,18 @@ export const FlightInfo: React.FC<FlightInfoProps> = ({ flight, collapsed = fals
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <BottomSheetScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {flightDetails.map(([label, value]) => (
         <FlightDetailRow key={label} label={label} value={value} />
       ))}
-    </ScrollView>
+    </BottomSheetScrollView>
   );
 };
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   content: {
     paddingBottom: spacing.lg,
   },

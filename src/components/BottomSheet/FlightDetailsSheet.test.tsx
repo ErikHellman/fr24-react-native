@@ -1,5 +1,4 @@
 import React from 'react';
-import { Animated } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { FlightDetailsSheet } from './FlightDetailsSheet';
 import { FlightPositionFull } from '../../types/flight';
@@ -32,12 +31,11 @@ const mockFlight: FlightPositionFull = {
 const defaultProps = {
   flight: mockFlight,
   sheetState: 'half' as const,
-  sheetTranslateY: new Animated.Value(0),
-  sheetFullHeight: 800,
+  sheetIndex: 1,
+  snapPoints: [96, '50%', '92%'],
+  onSheetChange: jest.fn(),
+  onSheetClose: jest.fn(),
   onCycleState: jest.fn(),
-  onExpand: jest.fn(),
-  onCollapse: jest.fn(),
-  onClose: jest.fn(),
 };
 
 describe('FlightDetailsSheet', () => {
@@ -67,92 +65,6 @@ describe('FlightDetailsSheet', () => {
     );
 
     expect(getByTestId('sheet-title')).toHaveTextContent('Flight Details');
-  });
-
-  it('shows Expand button when not in full state', () => {
-    const { getByTestId, queryByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} sheetState="half" />
-    );
-
-    expect(getByTestId('expand-button')).toBeTruthy();
-    expect(queryByTestId('collapse-button')).toBeNull();
-  });
-
-  it('shows Collapse button when in full state', () => {
-    const { getByTestId, queryByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} sheetState="full" />
-    );
-
-    expect(getByTestId('collapse-button')).toBeTruthy();
-    expect(queryByTestId('expand-button')).toBeNull();
-  });
-
-  it('calls onExpand when Expand is pressed', () => {
-    const onExpand = jest.fn();
-    const { getByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} onExpand={onExpand} sheetState="half" />
-    );
-
-    fireEvent.press(getByTestId('expand-button'));
-
-    expect(onExpand).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onCollapse when Collapse is pressed', () => {
-    const onCollapse = jest.fn();
-    const { getByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} onCollapse={onCollapse} sheetState="full" />
-    );
-
-    fireEvent.press(getByTestId('collapse-button'));
-
-    expect(onCollapse).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onClose when Close is pressed', () => {
-    const onClose = jest.fn();
-    const { getByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} onClose={onClose} />
-    );
-
-    fireEvent.press(getByTestId('close-button'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onClose when backdrop is pressed', () => {
-    const onClose = jest.fn();
-    const { getByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} onClose={onClose} sheetState="half" />
-    );
-
-    fireEvent.press(getByTestId('sheet-backdrop'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not render backdrop when collapsed', () => {
-    const { queryByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} sheetState="collapsed" />
-    );
-
-    expect(queryByTestId('sheet-backdrop')).toBeNull();
-  });
-
-  it('renders backdrop when in half state', () => {
-    const { getByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} sheetState="half" />
-    );
-
-    expect(getByTestId('sheet-backdrop')).toBeTruthy();
-  });
-
-  it('renders backdrop when in full state', () => {
-    const { getByTestId } = render(
-      <FlightDetailsSheet {...defaultProps} sheetState="full" />
-    );
-
-    expect(getByTestId('sheet-backdrop')).toBeTruthy();
   });
 
   it('calls onCycleState when handle is pressed', () => {

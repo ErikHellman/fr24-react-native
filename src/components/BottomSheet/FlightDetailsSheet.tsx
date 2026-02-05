@@ -1,5 +1,11 @@
-import React from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback } from 'react';
+import BottomSheet, {
+  BottomSheetBackdrop,
+  BottomSheetBackdropProps,
+  BottomSheetHandleProps,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet';
+import { StyleSheet, Text, View } from 'react-native';
 import { FlightPositionFull } from '../../types/flight';
 import { SheetState } from '../../hooks/useBottomSheet';
 import { colors, borderRadius, spacing } from '../../constants/theme';
@@ -9,87 +15,82 @@ import { FlightInfo } from './FlightInfo';
 export type FlightDetailsSheetProps = {
   flight: FlightPositionFull;
   sheetState: SheetState;
-  sheetTranslateY: Animated.Value;
-  sheetFullHeight: number;
+  sheetIndex: number;
+  snapPoints: Array<string | number>;
+  onSheetChange: (index: number) => void;
+  onSheetClose: () => void;
   onCycleState: () => void;
-  onExpand: () => void;
-  onCollapse: () => void;
-  onClose: () => void;
 };
 
 export const FlightDetailsSheet: React.FC<FlightDetailsSheetProps> = ({
   flight,
   sheetState,
-  sheetTranslateY,
-  sheetFullHeight,
+  sheetIndex,
+  snapPoints,
+  onSheetChange,
+  onSheetClose,
   onCycleState,
-  onExpand,
-  onCollapse,
-  onClose,
 }) => {
   const title = flight.flight ?? flight.callsign ?? 'Flight Details';
 
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={1}
+        disappearsOnIndex={0}
+        pressBehavior="close"
+        style={[props.style, styles.backdrop]}
+        testID="sheet-backdrop"
+      />
+    ),
+    []
+  );
+
+  const renderHandle = useCallback(
+    (props: BottomSheetHandleProps) => (
+      <SheetHandle onPress={onCycleState} style={props.style} />
+    ),
+    [onCycleState]
+  );
+
   return (
-    <>
-      {sheetState !== 'collapsed' && (
-        <Pressable
-          testID="sheet-backdrop"
-          style={styles.backdrop}
-          onPress={onClose}
-        />
-      )}
-      <Animated.View
-        testID="flight-details-sheet"
-        style={[
-          styles.sheet,
-          {
-            height: sheetFullHeight,
-            transform: [{ translateY: sheetTranslateY }],
-          },
-        ]}
-      >
-        <SheetHandle onPress={onCycleState} />
+    <BottomSheet
+      index={sheetIndex}
+      snapPoints={snapPoints}
+      onChange={onSheetChange}
+      onClose={onSheetClose}
+      enablePanDownToClose
+      backdropComponent={renderBackdrop}
+      handleComponent={renderHandle}
+      backgroundStyle={styles.sheet}
+    >
+      <BottomSheetView style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title} testID="sheet-title">
             {title}
           </Text>
-          <View style={styles.actions}>
-            {sheetState !== 'full' ? (
-              <Pressable testID="expand-button" onPress={onExpand} hitSlop={10}>
-                <Text style={styles.action}>Expand</Text>
-              </Pressable>
-            ) : (
-              <Pressable testID="collapse-button" onPress={onCollapse} hitSlop={10}>
-                <Text style={styles.action}>Collapse</Text>
-              </Pressable>
-            )}
-            <Pressable testID="close-button" onPress={onClose} hitSlop={10}>
-              <Text style={styles.close}>Close</Text>
-            </Pressable>
-          </View>
         </View>
         <FlightInfo flight={flight} collapsed={sheetState === 'collapsed'} />
-      </Animated.View>
-    </>
+      </BottomSheetView>
+    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.backdrop,
   },
   sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     backgroundColor: colors.background,
     borderTopLeftRadius: borderRadius.lg,
     borderTopRightRadius: borderRadius.lg,
+  },
+  content: {
+    flex: 1,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.xxl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.lg,
   },
   header: {
     flexDirection: 'row',
@@ -97,24 +98,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
   title: {
     color: colors.white,
     fontSize: 16,
     fontWeight: '700',
-  },
-  action: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  close: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

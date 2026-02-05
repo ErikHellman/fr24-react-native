@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FlightPositionFull } from './types/flight';
@@ -23,9 +24,11 @@ const AIRPORTS = getAllAirports();
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AppContent />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -56,14 +59,13 @@ function AppContent() {
   const {
     selectedFlight,
     sheetState,
-    sheetTranslateY,
-    sheetFullHeight,
+    sheetIndex,
+    snapPoints,
     setSelectedFlight,
     openSheet,
-    expandSheetFull,
-    collapseSheet,
-    closeSheet,
     cycleSheetState,
+    handleSheetChange,
+    handleSheetClose,
   } = useBottomSheet();
 
   // Handler for region changes that also stores last region
@@ -145,12 +147,11 @@ function AppContent() {
         <FlightDetailsSheet
           flight={selectedFlight}
           sheetState={sheetState}
-          sheetTranslateY={sheetTranslateY}
-          sheetFullHeight={sheetFullHeight}
+          sheetIndex={sheetIndex}
+          snapPoints={snapPoints}
+          onSheetChange={handleSheetChange}
+          onSheetClose={handleSheetClose}
           onCycleState={cycleSheetState}
-          onExpand={expandSheetFull}
-          onCollapse={collapseSheet}
-          onClose={closeSheet}
         />
       )}
 
@@ -160,6 +161,9 @@ function AppContent() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.black,

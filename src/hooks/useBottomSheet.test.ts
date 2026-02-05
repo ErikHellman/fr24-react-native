@@ -32,15 +32,16 @@ describe('useBottomSheet', () => {
     const { result } = renderHook(() => useBottomSheet());
 
     expect(result.current.sheetState).toBe('collapsed');
+    expect(result.current.sheetIndex).toBe(0);
     expect(result.current.selectedFlight).toBeNull();
   });
 
-  it('calculates sheet heights based on screen size', () => {
+  it('provides snap points for collapsed, half, and full states', () => {
     const { result } = renderHook(() => useBottomSheet());
 
-    expect(result.current.sheetCollapsedHeight).toBe(96);
-    expect(result.current.sheetHalfHeight).toBeGreaterThan(0);
-    expect(result.current.sheetFullHeight).toBeGreaterThan(result.current.sheetHalfHeight);
+    expect(result.current.snapPoints[0]).toBe(96);
+    expect(result.current.snapPoints[1]).toBe('50%');
+    expect(result.current.snapPoints[2]).toBe('92%');
   });
 
   it('openSheet transitions to half state', () => {
@@ -52,6 +53,7 @@ describe('useBottomSheet', () => {
     });
 
     expect(result.current.sheetState).toBe('half');
+    expect(result.current.sheetIndex).toBe(1);
   });
 
   it('expandSheetFull transitions to full state', () => {
@@ -63,6 +65,7 @@ describe('useBottomSheet', () => {
     });
 
     expect(result.current.sheetState).toBe('full');
+    expect(result.current.sheetIndex).toBe(2);
   });
 
   it('collapseSheet transitions to collapsed state', () => {
@@ -80,27 +83,32 @@ describe('useBottomSheet', () => {
     });
 
     expect(result.current.sheetState).toBe('collapsed');
+    expect(result.current.sheetIndex).toBe(0);
   });
 
   it('cycleSheetState cycles through states correctly', () => {
     const { result } = renderHook(() => useBottomSheet());
 
     expect(result.current.sheetState).toBe('collapsed');
+    expect(result.current.sheetIndex).toBe(0);
 
     act(() => {
       result.current.cycleSheetState();
     });
     expect(result.current.sheetState).toBe('half');
+    expect(result.current.sheetIndex).toBe(1);
 
     act(() => {
       result.current.cycleSheetState();
     });
     expect(result.current.sheetState).toBe('full');
+    expect(result.current.sheetIndex).toBe(2);
 
     act(() => {
       result.current.cycleSheetState();
     });
     expect(result.current.sheetState).toBe('collapsed');
+    expect(result.current.sheetIndex).toBe(0);
   });
 
   it('setSelectedFlight updates selected flight', () => {
@@ -113,10 +121,31 @@ describe('useBottomSheet', () => {
     expect(result.current.selectedFlight).toEqual(mockFlight);
   });
 
-  it('provides Animated.Value for translateY', () => {
+  it('closeSheet sets sheet index to -1', () => {
     const { result } = renderHook(() => useBottomSheet());
 
-    expect(result.current.sheetTranslateY).toBeDefined();
-    expect(typeof result.current.sheetTranslateY.setValue).toBe('function');
+    act(() => {
+      result.current.closeSheet();
+    });
+
+    expect(result.current.sheetIndex).toBe(-1);
+  });
+
+  it('handleSheetClose clears selected flight and resets index', () => {
+    const { result } = renderHook(() => useBottomSheet());
+
+    act(() => {
+      result.current.setSelectedFlight(mockFlight);
+      result.current.expandSheetFull();
+    });
+
+    expect(result.current.sheetIndex).toBe(2);
+
+    act(() => {
+      result.current.handleSheetClose();
+    });
+
+    expect(result.current.selectedFlight).toBeNull();
+    expect(result.current.sheetIndex).toBe(0);
   });
 });

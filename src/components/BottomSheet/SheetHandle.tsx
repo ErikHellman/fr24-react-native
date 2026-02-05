@@ -1,16 +1,18 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { colors, borderRadius } from '../../constants/theme';
+import { TouchableOpacity } from '@gorhom/bottom-sheet';
+import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { borderRadius } from '../../constants/theme';
 
 export type SheetHandleProps = {
   onPress: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
-export const SheetHandle: React.FC<SheetHandleProps> = ({ onPress }) => {
+export const SheetHandle: React.FC<SheetHandleProps> = ({ onPress, style }) => {
   return (
-    <Pressable testID="sheet-handle" style={styles.wrap} onPress={onPress}>
+    <TouchableOpacity testID="sheet-handle" style={[styles.wrap, style]} onPress={onPress}>
       <View style={styles.handle} />
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 

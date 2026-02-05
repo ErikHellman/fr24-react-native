@@ -1,117 +1,109 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlightPositionFull } from '../types/flight';
-import { animation } from '../constants/theme';
 
 export type SheetState = 'collapsed' | 'half' | 'full';
 
 export type UseBottomSheetReturn = {
   selectedFlight: FlightPositionFull | null;
   sheetState: SheetState;
-  sheetTranslateY: Animated.Value;
-  sheetFullHeight: number;
-  sheetHalfHeight: number;
-  sheetCollapsedHeight: number;
+  sheetIndex: number;
+  snapPoints: Array<string | number>;
   setSelectedFlight: (flight: FlightPositionFull | null) => void;
   openSheet: () => void;
   expandSheetFull: () => void;
   collapseSheet: () => void;
   closeSheet: () => void;
   cycleSheetState: () => void;
+  handleSheetChange: (index: number) => void;
+  handleSheetClose: () => void;
 };
 
 const COLLAPSED_HEIGHT = 96;
+const HALF_SNAP = '50%';
+const FULL_SNAP = '92%';
 
 export const useBottomSheet = (): UseBottomSheetReturn => {
   const [selectedFlight, setSelectedFlight] = useState<FlightPositionFull | null>(null);
+  const [sheetIndex, setSheetIndex] = useState(0);
   const [sheetState, setSheetState] = useState<SheetState>('collapsed');
-  const { height: screenHeight } = useWindowDimensions();
 
-  const sheetHalfHeight = useMemo(() => Math.round(screenHeight * 0.5), [screenHeight]);
-  const sheetFullHeight = useMemo(() => Math.round(screenHeight * 0.92), [screenHeight]);
-  const sheetCollapsedHeight = COLLAPSED_HEIGHT;
-
-  const sheetTranslateY = useRef(new Animated.Value(screenHeight)).current;
-
-  // Reset sheet position when flight is deselected
-  useEffect(() => {
-    if (!selectedFlight) {
-      sheetTranslateY.setValue(sheetFullHeight);
-    }
-  }, [selectedFlight, sheetFullHeight, sheetTranslateY]);
-
-  const animateSheetTo = useCallback(
-    (state: SheetState) => {
-      const visibleHeight =
-        state === 'full'
-          ? sheetFullHeight
-          : state === 'half'
-            ? sheetHalfHeight
-            : sheetCollapsedHeight;
-
-      Animated.timing(sheetTranslateY, {
-        toValue: sheetFullHeight - visibleHeight,
-        duration: animation.sheetDuration,
-        useNativeDriver: true,
-      }).start();
-    },
-    [sheetCollapsedHeight, sheetFullHeight, sheetHalfHeight, sheetTranslateY],
+  const snapPoints = useMemo<Array<string | number>>(
+    () => [COLLAPSED_HEIGHT, HALF_SNAP, FULL_SNAP],
+    []
   );
 
-  // Animate when state changes
   useEffect(() => {
-    if (selectedFlight) {
-      animateSheetTo(sheetState);
+    if (!selectedFlight && sheetIndex !== 0) {
+      setSheetIndex(0);
+      setSheetState('collapsed');
     }
-  }, [animateSheetTo, selectedFlight, sheetState]);
+  }, [selectedFlight, sheetIndex]);
 
   const openSheet = useCallback(() => {
+    setSheetIndex(1);
     setSheetState('half');
   }, []);
 
   const expandSheetFull = useCallback(() => {
+    setSheetIndex(2);
     setSheetState('full');
   }, []);
 
   const collapseSheet = useCallback(() => {
+    setSheetIndex(0);
     setSheetState('collapsed');
   }, []);
 
   const closeSheet = useCallback(() => {
-    Animated.timing(sheetTranslateY, {
-      toValue: sheetFullHeight,
-      duration: animation.closeDuration,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) {
-        setSelectedFlight(null);
+    setSheetIndex(-1);
+  }, []);
+
+  const handleSheetChange = useCallback((index: number) => {
+    setSheetIndex(index);
+    if (index >= 0) {
+      if (index === 0) {
         setSheetState('collapsed');
+      } else if (index === 1) {
+        setSheetState('half');
+      } else {
+        setSheetState('full');
       }
-    });
-  }, [sheetFullHeight, sheetTranslateY]);
+    }
+  }, []);
+
+  const handleSheetClose = useCallback(() => {
+    setSelectedFlight(null);
+    setSheetIndex(0);
+    setSheetState('collapsed');
+  }, []);
 
   const cycleSheetState = useCallback(() => {
     if (sheetState === 'collapsed') {
+      setSheetIndex(1);
       setSheetState('half');
-    } else if (sheetState === 'half') {
-      setSheetState('full');
-    } else {
-      setSheetState('collapsed');
+      return;
     }
+    if (sheetState === 'half') {
+      setSheetIndex(2);
+      setSheetState('full');
+      return;
+    }
+    setSheetIndex(0);
+    setSheetState('collapsed');
   }, [sheetState]);
 
   return {
     selectedFlight,
+    sheetIndex,
+    snapPoints,
     sheetState,
-    sheetTranslateY,
-    sheetFullHeight,
-    sheetHalfHeight,
-    sheetCollapsedHeight,
     setSelectedFlight,
     openSheet,
     expandSheetFull,
     collapseSheet,
     closeSheet,
     cycleSheetState,
+    handleSheetChange,
+    handleSheetClose,
   };
 };

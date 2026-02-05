@@ -10,7 +10,14 @@ export type SheetHandleProps = {
 
 export const SheetHandle: React.FC<SheetHandleProps> = ({ onPress, style }) => {
   return (
-    <TouchableOpacity testID="sheet-handle" style={[styles.wrap, style]} onPress={onPress}>
+    <TouchableOpacity
+      testID="sheet-handle"
+      style={[styles.wrap, style]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Change flight details sheet size"
+      accessibilityHint="Double tap to expand or collapse the sheet"
+    >
       <View style={styles.handle} />
     </TouchableOpacity>
   );

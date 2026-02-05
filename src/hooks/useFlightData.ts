@@ -28,6 +28,10 @@ export const useFlightData = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
+  const sortByAltitudeAsc = useCallback(
+    (flights: FlightPositionFull[]) => [...flights].sort((a, b) => a.alt - b.alt),
+    []
+  );
 
   const fetchLiveFlights = useCallback((bounds: MapBounds) => {
     if (inFlightRef.current) {
@@ -42,7 +46,7 @@ export const useFlightData = ({
 
     getLiveFlightPositionsFull(FR24_API_KEY, { bounds, signal: controller.signal })
       .then((response) => {
-        setVisibleFlights(response.data);
+        setVisibleFlights(sortByAltitudeAsc(response.data));
         setIsLoading(false);
       })
       .catch((err: unknown) => {
@@ -68,7 +72,7 @@ export const useFlightData = ({
 
     getLiveFlightPositionsFullByAirport(FR24_API_KEY, { airportCode, signal: controller.signal })
       .then((response) => {
-        setVisibleFlights(response.data);
+        setVisibleFlights(sortByAltitudeAsc(response.data));
         setIsLoading(false);
       })
       .catch((err: unknown) => {

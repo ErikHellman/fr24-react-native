@@ -67,7 +67,12 @@ export const FlightDetailsSheet: React.FC<FlightDetailsSheetProps> = ({
     >
       <BottomSheetView style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title} testID="sheet-title">
+          <Text
+            style={styles.title}
+            testID="sheet-title"
+            accessibilityRole="header"
+            accessibilityLabel="Flight details title"
+          >
             {title}
           </Text>
         </View>
@@ -100,7 +105,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
   },
 });

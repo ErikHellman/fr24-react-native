@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "fr24-react-native",
+    "name": "FlightRadar24 React Native",
     "slug": "fr24-react-native",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -29,9 +29,6 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single"
-    },
-    "experiments": {
-      "baseUrl": "/fr24-react-native"
     }
   }
 }

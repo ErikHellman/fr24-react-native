@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity } from '@gorhom/bottom-sheet';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { borderRadius } from '../../constants/theme';
+import { borderRadius, sheetColors } from '../../constants/theme';
 
 export type SheetHandleProps = {
   onPress: () => void;
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 5,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: sheetColors.handle,
     marginBottom: 12,
   },
 });

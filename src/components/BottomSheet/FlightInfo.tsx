@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { StyleSheet, Text, View } from 'react-native';
 import { FlightPositionFull } from '../../types/flight';
-import { borderRadius, colors, spacing } from '../../constants/theme';
+import { borderRadius, sheetColors, spacing } from '../../constants/theme';
 
 export type FlightInfoProps = {
   flight: FlightPositionFull;
@@ -160,14 +160,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   section: {
-    backgroundColor: colors.searchBackground,
+    backgroundColor: sheetColors.sectionBackground,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
   },
   sectionTitle: {
-    color: colors.white,
+    color: sheetColors.sectionTitle,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: spacing.sm,
@@ -177,14 +177,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: sheetColors.border,
   },
   label: {
-    color: colors.whiteMuted,
+    color: sheetColors.label,
     fontSize: 14,
   },
   value: {
-    color: colors.white,
+    color: sheetColors.value,
     fontSize: 15,
     maxWidth: '55%',
     textAlign: 'right',

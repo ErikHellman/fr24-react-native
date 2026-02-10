@@ -13,6 +13,17 @@ export const colors = {
   black: '#000',
 };
 
+export const sheetColors = {
+  background: '#ffffff',
+  title: '#1a1a2e',
+  sectionBackground: '#f0f1f5',
+  sectionTitle: '#1a1a2e',
+  label: 'rgba(0, 0, 0, 0.55)',
+  value: '#1a1a2e',
+  border: 'rgba(0, 0, 0, 0.08)',
+  handle: 'rgba(0, 0, 0, 0.2)',
+};
+
 export const spacing = {
   xs: 2,
   sm: 6,

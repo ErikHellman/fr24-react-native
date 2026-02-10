@@ -8,7 +8,7 @@ import BottomSheet, {
 import { StyleSheet, Text, View } from 'react-native';
 import { FlightPositionFull } from '../../types/flight';
 import { SheetState } from '../../hooks/useBottomSheet';
-import { colors, borderRadius, spacing } from '../../constants/theme';
+import { colors, sheetColors, borderRadius, spacing } from '../../constants/theme';
 import { SheetHandle } from './SheetHandle';
 import { FlightInfo } from './FlightInfo';
 
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backdrop,
   },
   sheet: {
-    backgroundColor: colors.background,
+    backgroundColor: sheetColors.background,
     borderTopLeftRadius: borderRadius.lg,
     borderTopRightRadius: borderRadius.lg,
   },
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   title: {
-    color: colors.white,
+    color: sheetColors.title,
     fontSize: 20,
     fontWeight: '700',
   },
